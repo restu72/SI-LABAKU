@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafik Laba & Rugi dari Hasil Perhitungan</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <div>
+        <a class="btn btn-custom text-white" href="index.html">Beranda<i class="fas fa-arrow-right ms-2"></i></a>
+    
+
+    </div>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .section {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h3 {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #2d3436;
+        }
+        .calc-btn {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+        .calc-btn:hover {
+            background-color: #218838;
+        }
+        .result-item {
+            font-size: 18px;
+            margin-bottom: 10px;
+            padding: 5px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #e9ecef;
+            font-size: 17px;
+        }
+        .chart-container {
+            height: 400px;
+            width: 100%;
+        }
+        .alert {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Grafik Laba & Rugi Berdasarkan Hasil Perhitungan</h2>
+
+        <!-- Bagian Ringkasan Data -->
+        <div class="section">
+            <h3>Ringkasan Data Transaksi</h3>
+            <button class="calc-btn" onclick="hitungLabaRugi()">Hitung Laba & Rugi</button>
+            <div class="alert" id="calcAlert">Perhitungan selesai! Grafik telah diperbarui.</div>
+
+            <div class="result-item"><strong>Total Penjualan (Rp):</strong> <span id="totalPenjualan">-</span></div>
+            <div class="result-item"><strong>Total HPP (Rp):</strong> <span id="totalHPP">-</span></div>
+            <div class="result-item"><strong>Total Beban (Rp):</strong> <span id="totalBeban">-</span></div>
+            <div class="result-item"><strong><span id="labaRugiLabel">-</span> (Rp):</strong> <span id="nilaiLabaRugi">-</span></div>
+        </div>
+
+        <!-- Grafik Laba & Rugi -->
+        <div class="section">
+            <h3>Grafik Batang Laba & Rugi</h3>
+            <div class="chart-container">
+                <canvas id="labaRugiChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Tabel Verifikasi Data -->
+        <div class="section">
+            <h3>Data Dasar Perhitungan</h3>
+            <h4>Total Agregat</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Komponen</th>
+                        <th>Total Harga Beli (Rp)</th>
+                        <th>Total Harga Jual (Rp)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Persediaan Awal</td>
+                        <td id="totalPA_Beli">-</td>
+                        <td id="totalPA_Jual">-</td>
+                    </tr>
+                    <tr>
+                        <td>Pembelian</td>
+                        <td id="totalPB_Beli">-</td>
+                        <td id="totalPB_Jual">-</td>
+                    </tr>
+                    <tr>
+                        <td>Persediaan Akhir</td>
+                        <td id="totalPH_Beli">-</td>
+                        <td id="totalPH_Jual">-</td>
+                    </tr>
+                    <tr style="font-weight: bold;">
+                        <td>Beban</td>
+                        <td colspan="2" id="totalBebanTabel">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Ambil data dari localStorage (dari modul input sebelumnya)
+        const dbPA = JSON.parse(localStorage.getItem('dbPersediaanAwal')) || [];
+        const dbPB = JSON.parse(localStorage.getItem('dbPembelian')) || [];
+        const dbPH = JSON.parse(localStorage.getItem('dbPersediaanAkhir')) || [];
+        const dbBeban = JSON.parse(localStorage.getItem('dbBeban')) || [
+            // Simulasi data beban jika belum ada
+            { nama: "Sewa Tempat", jumlah: 500000 },
+            { nama: "Listrik & Air", jumlah: 150000 },
+            { nama: "Gaji Karyawan", jumlah: 1200000 },
+            { nama: "Biaya Promosi", jumlah: 300000 }
+        ];
+
+        // Inisialisasi grafik
+        let labaRugiChart = null;
+
+        // Fungsi hitung total per komponen
+        function hitungTotalKomponen(data, tipeHarga) {
+            return data.reduce((sum, item) => sum + (item.kuantitas * item[tipeHarga]), 0);
+        }
+
+        // Fungsi hitung laba & rugi utama
+        function hitungLabaRugi() {
+            // Hitung total harga beli/jual untuk setiap komponen
+            const totalPA_Beli = hitungTotalKomponen(dbPA, 'hargaBeli');
+            const totalPA_Jual = hitungTotalKomponen(dbPA, 'hargaJual');
+            const totalPB_Beli = hitungTotalKomponen(dbPB, 'hargaBeli');
+            const totalPB_Jual = hitungTotalKomponen(dbPB, 'hargaJual');
+            const totalPH_Beli = hitungTotalKomponen(dbPH, 'hargaBeli');
+            const totalPH_Jual = hitungTotalKomponen(dbPH, 'hargaJual');
+            const totalBeban = dbBeban.reduce((sum, beban) => sum + beban.jumlah, 0);
+
+            // Hitung sesuai rumus
+            const totalPenjualan = totalPA_Jual + totalPB_Jual - totalPH_Jual;
+            const totalHPP = totalPA_Beli + totalPB_Beli - totalPH_Beli;
+            const nilaiLabaRugi = totalPenjualan - totalHPP - totalBeban;
+            const labaRugiLabel = nilaiLabaRugi >= 0 ? "Laba Bersih" : "Rugi Bersih";
+
+            // Tampilkan hasil ke halaman
+            document.getElementById('totalPenjualan').textContent = formatAngka(totalPenjualan);
+            document.getElementById('totalHPP').textContent = formatAngka(totalHPP);
+            document.getElementById('totalBeban').textContent = formatAngka(totalBeban);
+            document.getElementById('labaRugiLabel').textContent = labaRugiLabel;
+            document.getElementById('nilaiLabaRugi').textContent = formatAngka(Math.abs(nilaiLabaRugi));
+
+            // Tampilkan data dasar
+            document.getElementById('totalPA_Beli').textContent = formatAngka(totalPA_Beli);
+            document.getElementById('totalPA_Jual').textContent = formatAngka(totalPA_Jual);
+            document.getElementById('totalPB_Beli').textContent = formatAngka(totalPB_Beli);
+            document.getElementById('totalPB_Jual').textContent = formatAngka(totalPB_Jual);
+            document.getElementById('totalPH_Beli').textContent = formatAngka(totalPH_Beli);
+            document.getElementById('totalPH_Jual').textContent = formatAngka(totalPH_Jual);
+            document.getElementById('totalBebanTabel').textContent = formatAngka(totalBeban);
+
+            // Tampilkan pesan sukses
+            document.getElementById('calcAlert').style.display = 'block';
+            setTimeout(() => document.getElementById('calcAlert').style.display = 'none', 3000);
+
+            // Buat/update grafik
+            buatGrafik(totalPenjualan, totalHPP, totalBeban, nilaiLabaRugi);
+        }
+
+        // Fungsi buat grafik batang
+        function buatGrafik(penjualan, hpp, beban, labaRugi) {
+            const ctx = document.getElementById('labaRugiChart').getContext('2d');
+
+            // Hapus grafik lama jika ada
+            if (labaRugiChart) labaRugiChart.destroy();
+
+            // Data untuk grafik
+            const labels = ['Total Penjualan', 'HPP', 'Total Beban', labaRugi >= 0 ? 'Laba Bersih' : 'Rugi Bersih'];
+            const dataValues = [penjualan, hpp, beban, Math.abs(labaRugi)];
+            const colors = [
+                '#007bff', // Biru (Penjualan)
+                '#ffc107', // Kuning (HPP)
+                '#dc3545', // Merah (Beban)
+                labaRugi >= 0 ? '#28a745' : '#6610f2' // Hijau (Laba) / Ungu (Rugi)
+            ];
+
+            // Inisialisasi grafik
+            labaRugiChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Nilai (Rp)',
+                        data: dataValues,
+                        backgroundColor: colors,
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Nilai (Rp)',
+                                font: { size: 16 }
+                            },
+                            ticks: {
+                                font: { size: 14 },
+                                callback: function(value) {
+                                    return formatAngka(value);
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: { font: { size: 14 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            fontSize: 14,
+                            callbacks: {
+                                label: function(context) {
+                                    return `Nilai: Rp ${formatAngka(context.raw)}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Fungsi format angka
+        function formatAngka(angka) {
+            return angka.toLocaleString('id-ID');
+        }
+
+        // Tampilkan data dasar saat halaman dimuat
+        window.onload = function() {
+            const totalPA_Beli = hitungTotalKomponen(dbPA, 'hargaBeli');
+            const totalPA_Jual = hitungTotalKomponen(dbPA, 'hargaJual');
+            const totalPB_Beli = hitungTotalKomponen(dbPB, 'hargaBeli');
+            const totalPB_Jual = hitungTotalKomponen(dbPB, 'hargaJual');
+            const totalPH_Beli = hitungTotalKomponen(dbPH, 'hargaBeli');
+            const totalPH_Jual = hitungTotalKomponen(dbPH, 'hargaJual');
+            const totalBeban = dbBeban.reduce((sum, beban) => sum + beban.jumlah, 0);
+
+            document.getElementById('totalPA_Beli').textContent = formatAngka(totalPA_Beli);
+            document.getElementById('totalPA_Jual').textContent = formatAngka(totalPA_Jual);
+            document.getElementById('totalPB_Beli').textContent = formatAngka(totalPB_Beli);
+            document.getElementById('totalPB_Jual').textContent = formatAngka(totalPB_Jual);
+            document.getElementById('totalPH_Beli').textContent = formatAngka(totalPH_Beli);
+            document.getElementById('totalPH_Jual').textContent = formatAngka(totalPH_Jual);
+            document.getElementById('totalBebanTabel').textContent = formatAngka(totalBeban);
+        };
+    </script>
+</body>
+</html>
